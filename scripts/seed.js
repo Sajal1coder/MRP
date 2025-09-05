@@ -6,6 +6,13 @@ const seedData = require('../utils/seedData');
 
 const runSeed = async () => {
   try {
+    if (!process.env.MONGODB_URI) {
+      console.error('❌ MONGODB_URI environment variable is not set!');
+      console.log('Please update your .env file with a valid MongoDB connection string.');
+      console.log('Example: MONGODB_URI=mongodb://localhost:27017/inventory_billing');
+      process.exit(1);
+    }
+
     console.log('🔌 Connecting to MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,

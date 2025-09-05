@@ -1,6 +1,7 @@
 const express = require('express');
-const { body, query } = require('express-validator');
+const { body, query, param } = require('express-validator');
 const auth = require('../middleware/auth');
+const mongoose = require('mongoose');
 const {
   getAllProducts,
   getProductById,
@@ -20,8 +21,15 @@ router.get('/', auth, [
   query('category').optional().trim()
 ], getAllProducts);
 
+// Validate MongoDB ObjectId
+const validateObjectId = [
+  param('id')
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
+    .withMessage('Invalid product ID')
+];
+
 // Get single product
-router.get('/:id', auth, getProductById);
+router.get('/:id', auth, validateObjectId, getProductById);
 
 // Create new product
 router.post('/', auth, [
@@ -45,46 +53,10 @@ router.post('/', auth, [
     .trim()
     .isLength({ min: 1, max: 50 })
     .withMessage('Category is required and cannot exceed 50 characters')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { name, description, price, stock, category } = req.body;
-
-    const product = new Product({
-      name,
-      description,
-      price: parseFloat(price),
-      stock: parseInt(stock),
-      category,
-      businessId: req.user._id
-    });
-
-    await product.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Product created successfully',
-      data: { product }
-    });
-  } catch (error) {
-    console.error('Create product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error creating product'
-    });
-  }
-});
+], createProduct);
 
 // Update product
-router.put('/:id', auth, [
+router.put('/:id', auth, validateObjectId, [
   body('name')
     .optional()
     .trim()
@@ -109,134 +81,19 @@ router.put('/:id', auth, [
     .trim()
     .isLength({ min: 1, max: 50 })
     .withMessage('Category cannot exceed 50 characters')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const updates = req.body;
-    if (updates.price) updates.price = parseFloat(updates.price);
-    if (updates.stock) updates.stock = parseInt(updates.stock);
-
-    const product = await Product.findOneAndUpdate(
-      { _id: req.params.id, businessId: req.user._id },
-      updates,
-      { new: true, runValidators: true }
-    );
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Product updated successfully',
-      data: { product }
-    });
-  } catch (error) {
-    console.error('Update product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating product'
-    });
-  }
-});
+], updateProduct);
 
 // Delete product
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    const product = await Product.findOneAndDelete({
-      _id: req.params.id,
-      businessId: req.user._id
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Product deleted successfully'
-    });
-  } catch (error) {
-    console.error('Delete product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error deleting product'
-    });
-  }
-});
+router.delete('/:id', auth, validateObjectId, deleteProduct);
 
 // Update stock (increase/decrease)
-router.patch('/:id/stock', auth, [
+router.patch('/:id/stock', auth, validateObjectId, [
   body('action')
     .isIn(['increase', 'decrease'])
     .withMessage('Action must be either increase or decrease'),
   body('quantity')
     .isInt({ min: 1 })
     .withMessage('Quantity must be a positive integer')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { action, quantity } = req.body;
-    const product = await Product.findOne({
-      _id: req.params.id,
-      businessId: req.user._id
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    if (action === 'increase') {
-      product.stock += parseInt(quantity);
-    } else {
-      if (product.stock < parseInt(quantity)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Insufficient stock'
-        });
-      }
-      product.stock -= parseInt(quantity);
-    }
-
-    await product.save();
-
-    res.json({
-      success: true,
-      message: `Stock ${action}d successfully`,
-      data: { product }
-    });
-  } catch (error) {
-    console.error('Update stock error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating stock'
-    });
-  }
-});
+], updateStock);
 
 module.exports = router;
