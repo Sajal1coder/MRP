@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: mrp-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false  # Set this to your MongoDB connection string in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set this to a secure random string in Render dashboard
+    plan: free
+    region: oregon  # Choose your preferred region
+    autoDeploy: true
